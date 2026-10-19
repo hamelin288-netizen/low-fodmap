@@ -1,0 +1,670 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moja aplikacja Low FODMAP</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 850px;
+      margin: 20px auto;
+      padding: 0 15px;
+      background: #f4f7f4;
+      color: #26352a;
+      box-sizing: border-box;
+    }
+
+    h1 { color: #276749; }
+
+    input, select, textarea, button {
+      font: inherit;
+      padding: 10px;
+      margin: 5px 0;
+      box-sizing: border-box;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  background: #276749;
+  color: white;
+  margin: 6px 8px 6px 0;
+}
+
+
+    .karta {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 12px 0;
+      box-shadow: 0 2px 5px #00000012;
+    }
+
+    .karta h3 { margin-top: 0; }
+
+    #status { color: #276749; }
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    button {
+      min-height: 44px;
+      padding: 10px 14px;
+      margin: 4px 4px 4px 0;
+      cursor: pointer;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0 12px;
+      border: 1px solid #b8c5b9;
+      border-radius: 6px;
+      background: #fff;
+      color: #26352a;
+      font-size: 16px;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+    .karta {
+      width: 100%;
+      box-sizing: border-box;
+      overflow-wrap: anywhere;
+      background: #fff;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid #d5dfd6;
+      border-radius: 10px;
+    }
+
+    .karta h3 {
+      margin-top: 0;
+      font-size: 20px;
+    }
+
+    .karta p {
+      line-height: 1.5;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        margin: 10px auto;
+        padding: 0 12px;
+      }
+
+      .karta {
+        padding: 12px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      h2 {
+        font-size: 21px;
+      }
+    }
+    .karta button {
+      max-width: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .karta textarea {
+      display: block;
+    }
+
+    @media (max-width: 600px) {
+      .karta button {
+        margin: 5px 5px 5px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Moja aplikacja Low FODMAP</h1>
+  <p>Produkty są wczytywane z pliku CSV.</p>
+
+  <p id="status">Wczytuję produkty...</p>
+
+  <label for="szukaj">Szukaj produktu</label>
+  <input id="szukaj" placeholder="Np. ryż">
+
+  <label for="filtr">Filtruj kategorię</label>
+  <select id="filtr">
+    <option value="">Wszystkie kategorie</option>
+  </select>
+
+  
+  <button id="ulubioneBtn">Pokaż ulubione⭐</button>
+  <button id="wszystkieBtn">Pokaż wszystkie</button>
+
+  <h2>Dodaj nowy produkt</h2>
+
+  <form id="formularzProduktu">
+    <label for="nowaNazwa">Nazwa produktu</label>
+    <input id="nowaNazwa" required placeholder="Np. płatki owsiane">
+
+    <label for="nowaKategoria">Kategoria</label>
+    <input id="nowaKategoria" required placeholder="Np. Produkty zbożowe">
+
+    <label for="nowyOpis">Opis</label>
+    <textarea id="nowyOpis" placeholder="Krótki opis produktu"></textarea>
+
+    <label for="nowaPorcja">Porcja</label>
+    <input id="nowaPorcja" placeholder="Np. 40 g">
+
+    <label for="nowyStatus">Status</label>
+    <select id="nowyStatus">
+      <option value="Do sprawdzenia">Do sprawdzenia</option>
+      <option value="Low FODMAP">Low FODMAP</option>
+      <option value="Wysoka zawartość FODMAP">Wysoka zawartość FODMAP</option>
+    </select>
+
+    <label for="noweZrodlo">Źródło informacji</label>
+    <input id="noweZrodlo" placeholder="Np. link lub nazwa źródła">
+
+    <button type="submit">Dodaj produkt</button>
+  </form>
+
+<section>
+  <h2>Kopia zapasowa</h2>
+
+  <button type="button" id="eksportujDane">
+    Pobierz kopię zapasową
+  </button>
+
+  <h3>Przywróć z kopii zapasowej</h3>
+
+  <input
+    type="file"
+    id="importujDane"
+    accept=".json,application/json"
+  >
+
+  <button type="button" id="przywrocDane">
+    Przywróć dane
+  </button>
+</section>
+
+  <section id="sekcjaEdycji" hidden>
+    <h2>Edytuj produkt</h2>
+
+    <form id="formularzEdycji">
+      <label for="edycjaNazwa">Nazwa produktu</label>
+      <input id="edycjaNazwa" required>
+
+      <label for="edycjaKategoria">Kategoria</label>
+      <input id="edycjaKategoria" required>
+
+      <label for="edycjaOpis">Opis</label>
+      <textarea id="edycjaOpis"></textarea>
+
+      <label for="edycjaPorcja">Porcja</label>
+      <input id="edycjaPorcja">
+
+      <label for="edycjaStatus">Status</label>
+      <select id="edycjaStatus">
+        <option value="Do sprawdzenia">Do sprawdzenia</option>
+        <option value="Low FODMAP">Low FODMAP</option>
+        <option value="Wysoka zawartość FODMAP">Wysoka zawartość FODMAP</option>
+      </select>
+
+      <label for="edycjaZrodlo">Źródło informacji</label>
+      <input id="edycjaZrodlo">
+
+      <button type="submit">Zapisz zmiany</button>
+      <button type="button" id="anulujEdycje">Anuluj</button>
+    </form>
+  </section>
+
+  <div id="lista"></div>
+
+  <div id="lista"></div>
+
+
+  <script>
+    const KLUCZ = "lowFodmapProdukty";
+    let produkty = [];
+    let tylkoUlubione = false;
+    let edytowanyProdukt = null;
+
+    function wczytajZapisane() {
+      try {
+        const tekst = localStorage.getItem(KLUCZ);
+        return tekst ? JSON.parse(tekst) : [];
+      } catch (blad) {
+        return [];
+      }
+    }
+
+    function zapiszProdukty() {
+      try {
+        localStorage.setItem(KLUCZ, JSON.stringify(produkty));
+        document.getElementById("status").textContent =
+          "Zmiany zapisane w przeglądarce.";
+      } catch (blad) {
+        document.getElementById("status").textContent =
+          "Nie udało się zapisać zmian.";
+      }
+    }
+
+    
+async function wczytajCSV() {
+  try {
+    const zapisane = wczytajZapisane();
+
+    // Jeśli mamy już zapisane produkty, używamy ich.
+    if (zapisane.length > 0) {
+      produkty = zapisane.map(p => ({
+        ...p,
+        porcja: p.porcja || "Do uzupełnienia",
+        status: p.status || "Do sprawdzenia",
+        zrodlo: p.zrodlo || "",
+        ulubiony: p.ulubiony === true,
+        notatka: p.notatka || ""
+      }));
+
+      uzupelnijKategorie();
+      pokazProdukty();
+
+      document.getElementById("status").textContent =
+        "Wczytano zapisane produkty: " + produkty.length;
+
+      return;
+    }
+
+    // Jeśli nie ma zapisanych produktów, pobieramy CSV.
+    const odpowiedz = await fetch("produkty.csv");
+
+    if (!odpowiedz.ok) {
+      throw new Error("Nie udało się pobrać pliku CSV.");
+    }
+
+    const tekst = await odpowiedz.text();
+    const wiersze = tekst.trim().split(/\r?\n/);
+
+    produkty = wiersze.slice(1)
+      .filter(wiersz => wiersz.trim() !== "")
+      .map(wiersz => {
+        const kolumny = wiersz.split(";");
+
+        return {
+          nazwa: (kolumny[0] || "").trim(),
+          kategoria: (kolumny[1] || "").trim(),
+          opis: (kolumny[2] || "").trim(),
+          porcja: (kolumny[3] || "").trim() || "Do uzupełnienia",
+          status: (kolumny[4] || "").trim() || "Do sprawdzenia",
+          zrodlo: (kolumny[5] || "").trim(),
+          ulubiony: false,
+          notatka: ""
+        };
+      })
+      .filter(p => p.nazwa !== "");
+
+    zapiszProdukty();
+    uzupelnijKategorie();
+    pokazProdukty();
+
+    document.getElementById("status").textContent =
+      "Wczytano produkty z CSV: " + produkty.length;
+
+    } catch (blad) {
+    document.getElementById("status").textContent =
+      "Błąd wczytywania danych. Sprawdź serwer i plik CSV.";
+
+    console.error(blad);
+  }
+}
+
+function uzupelnijKategorie() {
+      const filtr = document.getElementById("filtr");
+      const wybrana = filtr.value;
+
+      filtr.innerHTML = '<option value="">Wszystkie kategorie</option>';
+
+      const kategorie = [...new Set(
+        produkty.map(p => p.kategoria).filter(Boolean)
+      )];
+
+      kategorie.forEach(kategoria => {
+        const opcja = document.createElement("option");
+        opcja.value = kategoria;
+        opcja.textContent = kategoria;
+        filtr.appendChild(opcja);
+      });
+
+      if (kategorie.includes(wybrana)) {
+        filtr.value = wybrana;
+      }
+    }
+
+    function pokazProdukty() {
+      const lista = document.getElementById("lista");
+      const fraza = document.getElementById("szukaj")
+        .value.trim().toLowerCase();
+      const kategoria = document.getElementById("filtr").value;
+
+      lista.innerHTML = "";
+
+      const wynik = produkty.filter(p => {
+        const pasujeNazwa = p.nazwa.toLowerCase().includes(fraza);
+        const pasujeKategoria = !kategoria || p.kategoria === kategoria;
+        const pasujeUlubiony = !tylkoUlubione || p.ulubiony;
+
+        return pasujeNazwa && pasujeKategoria && pasujeUlubiony;
+      });
+
+      if (wynik.length === 0) {
+        lista.textContent = "Nie znaleziono produktów.";
+        return;
+      }
+
+      wynik.forEach(p => {
+        const karta = document.createElement("div");
+        karta.className = "karta";
+
+        const tytul = document.createElement("h3");
+        tytul.textContent = p.nazwa;
+
+        const kat = document.createElement("p");
+        kat.textContent = "Kategoria: " + p.kategoria;
+
+        const opis = document.createElement("p");
+        opis.textContent = p.opis;
+        
+        const porcja = document.createElement("p");
+        porcja.textContent = "Porcja: " + (p.porcja || "Brak danych");
+
+        const status = document.createElement("p");
+        status.textContent = "Status: " + (p.status || "Do sprawdzenia");
+
+        const zrodlo = document.createElement("p");
+        zrodlo.textContent = "Źródło: " + (p.zrodlo || "Nie podano");
+
+        const ulubionyBtn = document.createElement("button");
+        ulubionyBtn.textContent = p.ulubiony
+          ? "★ Usuń z ulubionych"
+          : "☆ Dodaj do ulubionych";
+
+        ulubionyBtn.addEventListener("click", () => {
+          p.ulubiony = !p.ulubiony;
+          zapiszProdukty();
+          pokazProdukty();
+        });
+
+        const etykieta = document.createElement("label");
+        etykieta.textContent = "Twoja notatka";
+
+        const notatka = document.createElement("textarea");
+        notatka.placeholder = "Wpisz własną notatkę...";
+        notatka.value = p.notatka;
+
+        const zapiszBtn = document.createElement("button");
+        zapiszBtn.textContent = "Zapisz notatkę";
+
+        zapiszBtn.addEventListener("click", () => {
+          p.notatka = notatka.value;
+          zapiszProdukty();
+        });
+
+        const edytujBtn = document.createElement("button");
+        edytujBtn.textContent = "Edytuj";
+
+        
+        edytujBtn.addEventListener("click", () => {
+          edytowanyProdukt = p;
+          document.getElementById("edycjaNazwa").value = p.nazwa;
+          document.getElementById("edycjaKategoria").value = p.kategoria;
+          document.getElementById("edycjaOpis").value = p.opis || "";
+          document.getElementById("edycjaPorcja").value = p.porcja || "";
+          document.getElementById("edycjaStatus").value = p.status || "Do sprawdzenia";
+          document.getElementById("edycjaZrodlo").value = p.zrodlo || "";
+
+          document.getElementById("sekcjaEdycji").hidden = false;
+          document.getElementById("sekcjaEdycji").scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
+
+          document.getElementById("edycjaNazwa").focus();
+        });
+
+
+
+        const usunBtn = document.createElement("button");
+        usunBtn.textContent = "Usuń";
+
+        usunBtn.addEventListener("click", () => {
+          const potwierdzenie = confirm(
+            'Czy na pewno chcesz usunąć produkt "' + p.nazwa + '"?'
+          );
+
+          if (!potwierdzenie) {
+            return;
+          }
+
+          produkty = produkty.filter(produkt => produkt !== p);
+
+          zapiszProdukty();
+          uzupelnijKategorie();
+          pokazProdukty();
+        });
+
+
+
+                karta.append(
+          tytul, kat, opis, porcja, status, zrodlo,
+          ulubionyBtn, etykieta, notatka, zapiszBtn,
+          edytujBtn, usunBtn
+        );
+
+        lista.appendChild(karta);
+      });
+    }
+
+    document.getElementById("szukaj")
+      .addEventListener("input", pokazProdukty);
+
+    document.getElementById("filtr")
+      .addEventListener("change", pokazProdukty);
+
+    document.getElementById("ulubioneBtn")
+      .addEventListener("click", () => {
+        tylkoUlubione = true;
+        pokazProdukty();
+      });
+
+    document.getElementById("wszystkieBtn")
+      .addEventListener("click", () => {
+        tylkoUlubione = false;
+        pokazProdukty();
+      });
+
+    document.getElementById("formularzProduktu")
+      .addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const nowyProdukt = {
+          nazwa: document.getElementById("nowaNazwa").value.trim(),
+          kategoria: document.getElementById("nowaKategoria").value.trim(),
+          opis: document.getElementById("nowyOpis").value.trim(),
+          porcja: document.getElementById("nowaPorcja").value.trim() || "Do uzupełnienia",
+          status: document.getElementById("nowyStatus").value,
+          zrodlo: document.getElementById("noweZrodlo").value.trim(),
+          ulubiony: false,
+          notatka: ""
+        };
+
+        produkty.push(nowyProdukt);
+        zapiszProdukty();
+        uzupelnijKategorie();
+        pokazProdukty();
+
+        document.getElementById("formularzProduktu").reset();
+
+        document.getElementById("status").textContent =
+          "Dodano produkt: " + nowyProdukt.nazwa;
+      });
+
+    wczytajCSV();
+
+    document.getElementById("formularzEdycji")
+      .addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        if (!edytowanyProdukt) {
+          return;
+        }
+
+        edytowanyProdukt.nazwa =
+          document.getElementById("edycjaNazwa").value.trim();
+
+        edytowanyProdukt.kategoria =
+          document.getElementById("edycjaKategoria").value.trim();
+
+        edytowanyProdukt.opis =
+          document.getElementById("edycjaOpis").value.trim();
+
+        edytowanyProdukt.porcja =
+          document.getElementById("edycjaPorcja").value.trim();
+
+        edytowanyProdukt.status =
+          document.getElementById("edycjaStatus").value;
+
+        edytowanyProdukt.zrodlo =
+          document.getElementById("edycjaZrodlo").value.trim();
+
+        zapiszProdukty();
+        uzupelnijKategorie();
+        pokazProdukty();
+
+        document.getElementById("sekcjaEdycji").hidden = true;
+        edytowanyProdukt = null;
+
+        document.getElementById("status").textContent =
+          "Zmiany produktu zostały zapisane.";
+      });
+    document.getElementById("anulujEdycje")
+      .addEventListener("click", () => {
+        document.getElementById("sekcjaEdycji").hidden = true;
+        document.getElementById("formularzEdycji").reset();
+        edytowanyProdukt = null;
+      });
+    wczytajCSV();
+
+    document.getElementById("eksportujDane")
+      .addEventListener("click", () => {
+        const dane = JSON.stringify(produkty, null, 2);
+
+        const plik = new Blob(
+          [dane],
+          { type: "application/json" }
+        );
+
+        const adres = URL.createObjectURL(plik);
+
+        const link = document.createElement("a");
+        link.href = adres;
+        link.download = "kopia-zapasowa-low-fodmap.json";
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        URL.revokeObjectURL(adres);
+
+        document.getElementById("status").textContent =
+          "Pobrano kopię zapasową produktów.";
+      });
+    document.getElementById("przywrocDane")
+      .addEventListener("click", async () => {
+        const polePliku = document.getElementById("importujDane");
+        const plik = polePliku.files[0];
+
+        if (!plik) {
+          alert("Najpierw wybierz plik kopii zapasowej.");
+          return;
+        }
+
+        const potwierdzenie = confirm(
+          "Przywrócenie zastąpi obecną listę produktów. Czy chcesz kontynuować?"
+        );
+
+        if (!potwierdzenie) {
+          return;
+        }
+
+        try {
+          const tekst = await plik.text();
+          const dane = JSON.parse(tekst);
+
+          if (
+            !Array.isArray(dane) ||
+            !dane.every(p =>
+              p &&
+              typeof p === "object" &&
+              !Array.isArray(p) &&
+              typeof p.nazwa === "string" &&
+              typeof p.kategoria === "string"
+            )
+          ) {
+            throw new Error("Nieprawidłowy format kopii zapasowej.");
+          }
+
+          produkty = dane.map(p => ({
+            nazwa: p.nazwa,
+            kategoria: p.kategoria,
+            opis: typeof p.opis === "string" ? p.opis : "",
+            porcja: typeof p.porcja === "string"
+              ? p.porcja
+              : "Do uzupełnienia",
+            status: typeof p.status === "string"
+              ? p.status
+              : "Do sprawdzenia",
+            zrodlo: typeof p.zrodlo === "string" ? p.zrodlo : "",
+            ulubiony: p.ulubiony === true,
+            notatka: typeof p.notatka === "string" ? p.notatka : ""
+          }));
+
+          localStorage.setItem(KLUCZ, JSON.stringify(produkty));
+
+          uzupelnijKategorie();
+          pokazProdukty();
+
+          document.getElementById("status").textContent =
+            "Przywrócono produkty: " + produkty.length;
+
+          polePliku.value = "";
+        } catch (blad) {
+          alert(
+            "Nie udało się przywrócić danych. Wybierz prawidłową kopię zapasową."
+          );
+          console.error(blad);
+        }
+      });
+  </script>
+
+</body>
+</html>

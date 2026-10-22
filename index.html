@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Moja aplikacja Low FODMAP</title>
+  <title>Low FODMAP – Baza produktów</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -139,14 +138,49 @@ button {
         margin: 5px 5px 5px 0;
       }
     }
+    
+[hidden] {
+  display: none !important;
+}
   </style>
 </head>
 <body>
 
-  <h1>Moja aplikacja Low FODMAP</h1>
-  <p>Produkty są wczytywane z pliku CSV.</p>
+  <h1>Dieta Low FODMAP</h1>
+  <p>Przeglądaj produkty i informacje o diecie Low FODMAP.</p>
 
   <p id="status">Wczytuję produkty...</p>
+
+<section id="sekcjaLogowania">
+  <h2>Logowanie</h2>
+
+  <form id="formularzLogowania">
+    <label for="loginEmail">Adres e-mail</label>
+    <input
+      type="email"
+      id="loginEmail"
+      autocomplete="username"
+      required
+    >
+
+    <label for="loginHaslo">Hasło</label>
+    <input
+      type="password"
+      id="loginHaslo"
+      autocomplete="current-password"
+      required
+    >
+
+    <button type="submit">Zaloguj się</button>
+  </form>
+
+  <p id="statusLogowania"></p>
+  
+  <button type="button" id="wylogujBtn" hidden>
+    Wyloguj się
+  </button>
+
+</section>
 
   <label for="szukaj">Szukaj produktu</label>
   <input id="szukaj" placeholder="Np. ryż">
@@ -159,7 +193,7 @@ button {
   
   <button id="ulubioneBtn">Pokaż ulubione⭐</button>
   <button id="wszystkieBtn">Pokaż wszystkie</button>
-
+  <section id="panelAdministracyjny" hidden>
   <h2>Dodaj nowy produkt</h2>
 
   <form id="formularzProduktu">
@@ -187,7 +221,7 @@ button {
 
     <button type="submit">Dodaj produkt</button>
   </form>
-
+</section>
 <section>
   <h2>Kopia zapasowa</h2>
 
@@ -195,7 +229,10 @@ button {
     Pobierz kopię zapasową
   </button>
 
+  
+<div id="panelPrzywracania" hidden>
   <h3>Przywróć z kopii zapasowej</h3>
+
 
   <input
     type="file"
@@ -206,6 +243,7 @@ button {
   <button type="button" id="przywrocDane">
     Przywróć dane
   </button>
+  </div>
 </section>
 
   <section id="sekcjaEdycji" hidden>
@@ -241,11 +279,363 @@ button {
 
   <div id="lista"></div>
 
-  <div id="lista"></div>
-
 
   <script>
-    const KLUCZ = "lowFodmapProdukty";
+    const SUPABASE_URL = "https://webdnoycovmmolegnjwo.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_vqddtTfDdoGUc0oa-veOaQ_ta9p1x8l";
+    
+async function zaloguj(email, haslo) {
+  const odpowiedz = await fetch(
+    `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email: email,
+        password: haslo
+      })
+    }
+  );
+
+  const dane = await odpowiedz.json();
+
+  if (!odpowiedz.ok) {
+    throw new Error(
+      dane.msg || dane.error_description ||
+      dane.message || "Nie udało się zalogować."
+    );
+  }
+
+  return dane;
+}
+
+function zapiszSesje(sesja) {
+  tokenSesji = sesja.access_token;
+  refreshTokenSesji = sesja.refresh_token;
+
+  localStorage.setItem(
+    KLUCZ_SESJI,
+    JSON.stringify({
+      access_token: sesja.access_token,
+      refresh_token: sesja.refresh_token,
+      expires_at: Math.floor(Date.now() / 1000) +
+        sesja.expires_in
+    })
+  );
+}
+
+async function odnowSesje(refreshToken) {
+  const odpowiedz = await fetch(
+    `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        refresh_token: refreshToken
+      })
+    }
+  );
+
+  const dane = await odpowiedz.json();
+
+  if (!odpowiedz.ok) {
+    throw new Error(
+      dane.msg ||
+      dane.error_description ||
+      dane.message ||
+      "Nie udało się odnowić sesji."
+    );
+  }
+
+  zapiszSesje(dane);
+
+  return dane;
+}
+
+async function przywrocSesje() {
+  const zapisanaSesja = localStorage.getItem(KLUCZ_SESJI);
+
+  if (!zapisanaSesja) {
+    return;
+  }
+
+  try {
+    const dane = JSON.parse(zapisanaSesja);
+
+    if (!dane.refresh_token) {
+      throw new Error("Brak tokenu odnawiania sesji.");
+    }
+
+    let sesja;
+
+    const teraz = Math.floor(Date.now() / 1000);
+
+    if (
+      dane.access_token &&
+      dane.expires_at &&
+      dane.expires_at > teraz + 60
+    ) {
+      sesja = dane;
+      tokenSesji = dane.access_token;
+      refreshTokenSesji = dane.refresh_token;
+    } else {
+      sesja = await odnowSesje(dane.refresh_token);
+    }
+
+    const jestAdministratorem = await sprawdzAdministratora(
+      sesja.access_token
+    );
+
+    tokenSesji = sesja.access_token;
+
+    const odpowiedzUzytkownika = await fetch(
+  `${SUPABASE_URL}/auth/v1/user`,
+  {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${sesja.access_token}`
+    }
+  }
+);
+
+if (!odpowiedzUzytkownika.ok) {
+  throw new Error(
+    `Nie udało się pobrać użytkownika: ${odpowiedzUzytkownika.status}`
+  );
+}
+
+const daneUzytkownika = await odpowiedzUzytkownika.json();
+
+idZalogowanegoUzytkownika = daneUzytkownika.id;
+
+    if (jestAdministratorem) {
+      tokenAdministratora = sesja.access_token;
+      czyZalogowanyAdministrator = true;
+
+      document.getElementById(
+        "panelAdministracyjny"
+      ).hidden = false;
+
+      document.getElementById(
+        "statusLogowania"
+      ).textContent = "Przywrócono sesję administratora.";
+    } else {
+      tokenAdministratora = null;
+      czyZalogowanyAdministrator = false;
+
+      document.getElementById(
+        "panelAdministracyjny"
+      ).hidden = true;
+
+      document.getElementById(
+        "statusLogowania"
+      ).textContent = "Przywrócono sesję użytkownika.";
+    }
+
+    document.getElementById(
+      "wylogujBtn"
+    ).hidden = false;
+
+    pokazProdukty();
+
+  } catch (blad) {
+    console.error("Błąd przywracania sesji:", blad);
+
+    tokenSesji = null;
+    refreshTokenSesji = null;
+    tokenAdministratora = null;
+    czyZalogowanyAdministrator = false;
+    idZalogowanegoUzytkownika = null;
+
+    localStorage.removeItem(KLUCZ_SESJI);
+
+    document.getElementById(
+      "panelAdministracyjny"
+    ).hidden = true;
+
+    document.getElementById(
+      "wylogujBtn"
+    ).hidden = true;
+
+    document.getElementById(
+      "statusLogowania"
+    ).textContent =
+      "Nie udało się przywrócić sesji. Zaloguj się ponownie.";
+
+    pokazProdukty();
+  }
+}
+
+async function pobierzWaznyTokenAdministratora() {
+  if (!czyZalogowanyAdministrator) {
+    throw new Error("Musisz zalogować się jako administrator.");
+  }
+
+  const zapisanaSesja = localStorage.getItem(KLUCZ_SESJI);
+
+  if (!zapisanaSesja) {
+    throw new Error("Nie znaleziono zapisanej sesji.");
+  }
+
+  const dane = JSON.parse(zapisanaSesja);
+  const teraz = Math.floor(Date.now() / 1000);
+
+  if (
+    dane.access_token &&
+    dane.expires_at &&
+    dane.expires_at > teraz + 60
+  ) {
+    return dane.access_token;
+  }
+
+  if (!dane.refresh_token) {
+    throw new Error("Nie można odnowić sesji. Zaloguj się ponownie.");
+  }
+
+  const nowaSesja = await odnowSesje(dane.refresh_token);
+
+  const jestAdministratorem = await sprawdzAdministratora(
+    nowaSesja.access_token
+  );
+
+  if (!jestAdministratorem) {
+    tokenAdministratora = null;
+    czyZalogowanyAdministrator = false;
+
+    document.getElementById(
+      "panelAdministracyjny"
+    ).hidden = true;
+
+    document.getElementById(
+      "sekcjaEdycji"
+    ).hidden = true;
+
+    pokazProdukty();
+
+    throw new Error("Brak uprawnień administratora.");
+  }
+
+  tokenAdministratora = nowaSesja.access_token;
+
+  return tokenAdministratora;
+}
+
+async function sprawdzAdministratora(token) {
+  const odpowiedz = await fetch(
+    `${SUPABASE_URL}/rest/v1/rpc/czy_administrator`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({})
+    }
+  );
+
+  if (!odpowiedz.ok) {
+    throw new Error(
+      "Nie udało się sprawdzić uprawnień."
+    );
+  }
+
+  return await odpowiedz.json();
+}
+
+async function aktualizujProduktWSupabase(id, zmiany) {
+  if (!tokenAdministratora) {
+  throw new Error("Musisz zalogować się jako administrator.");
+}
+
+const aktualnyToken = await pobierzWaznyTokenAdministratora();
+
+  const odpowiedz = await fetch(
+    `${SUPABASE_URL}/rest/v1/produkty?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${aktualnyToken}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify(zmiany)
+    }
+  );
+
+  if (!odpowiedz.ok) {
+    const szczegoly = await odpowiedz.text();
+    throw new Error(
+      `Błąd aktualizacji ${odpowiedz.status}: ${szczegoly}`
+    );
+  }
+
+  const zaktualizowane = await odpowiedz.json();
+
+  if (zaktualizowane.length !== 1) {
+    throw new Error(
+      "Nie znaleziono produktu do aktualizacji."
+    );
+  }
+
+  return zaktualizowane[0];
+}
+
+
+async function usunProduktZSupabase(id) {
+  if (!tokenAdministratora) {
+    throw new Error(
+      "Musisz zalogować się jako administrator."
+    );
+  }
+
+  const aktualnyToken = await pobierzWaznyTokenAdministratora();
+  
+  const odpowiedz = await fetch(
+    `${SUPABASE_URL}/rest/v1/produkty?id=eq.${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${aktualnyToken}`,
+        Prefer: "return=representation"
+      }
+    }
+  );
+
+  if (!odpowiedz.ok) {
+    const szczegoly = await odpowiedz.text();
+
+    throw new Error(
+      `Błąd usuwania ${odpowiedz.status}: ${szczegoly}`
+    );
+  }
+
+  const usuniete = await odpowiedz.json();
+
+  if (usuniete.length !== 1) {
+    throw new Error(
+      "Nie znaleziono produktu do usunięcia."
+    );
+  }
+
+  return usuniete[0];
+}
+
+    const KLUCZ = "lowFodmapProdukty"; 
+    let tokenAdministratora = null;
+    let tokenSesji = null;
+    let idZalogowanegoUzytkownika = null;
+    const KLUCZ_SESJI = "lowFodmapSesja";
+    let refreshTokenSesji = null;
+    let czyZalogowanyAdministrator = false;
     let produkty = [];
     let tylkoUlubione = false;
     let edytowanyProdukt = null;
@@ -259,85 +649,87 @@ button {
       }
     }
 
-    function zapiszProdukty() {
-      try {
-        localStorage.setItem(KLUCZ, JSON.stringify(produkty));
-        document.getElementById("status").textContent =
-          "Zmiany zapisane w przeglądarce.";
-      } catch (blad) {
-        document.getElementById("status").textContent =
-          "Nie udało się zapisać zmian.";
-      }
-    }
-
     
-async function wczytajCSV() {
+function zapiszProdukty() {
   try {
-    const zapisane = wczytajZapisane();
+    const danePrywatne = produkty.map(p => ({
+      id: p.id,
+      nazwa: p.nazwa,
+      ulubiony: p.ulubiony === true,
+      notatka: p.notatka || ""
+    }));
 
-    // Jeśli mamy już zapisane produkty, używamy ich.
-    if (zapisane.length > 0) {
-      produkty = zapisane.map(p => ({
-        ...p,
-        porcja: p.porcja || "Do uzupełnienia",
-        status: p.status || "Do sprawdzenia",
-        zrodlo: p.zrodlo || "",
-        ulubiony: p.ulubiony === true,
-        notatka: p.notatka || ""
-      }));
+    localStorage.setItem(
+      KLUCZ,
+      JSON.stringify(danePrywatne)
+    );
 
-      uzupelnijKategorie();
-      pokazProdukty();
+    document.getElementById("status").textContent =
+      "Twoje notatki i ulubione zapisano w przeglądarce.";
 
-      document.getElementById("status").textContent =
-        "Wczytano zapisane produkty: " + produkty.length;
+  } catch (blad) {
+    console.error("Błąd zapisywania danych:", blad);
 
-      return;
-    }
+    document.getElementById("status").textContent =
+      "Nie udało się zapisać danych prywatnych.";
+  }
+}
+  
+async function wczytajCSV() {
+  const status = document.getElementById("status");
 
-    // Jeśli nie ma zapisanych produktów, pobieramy CSV.
-    const odpowiedz = await fetch("produkty.csv");
+  status.textContent = "Pobieram produkty z Supabase...";
+
+  try {
+    const odpowiedz = await fetch(
+      `${SUPABASE_URL}/rest/v1/produkty?select=id,nazwa,kategoria,opis,porcja,status,zrodlo&order=nazwa.asc`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY
+        }
+      }
+    );
 
     if (!odpowiedz.ok) {
-      throw new Error("Nie udało się pobrać pliku CSV.");
+      throw new Error(`Błąd HTTP: ${odpowiedz.status}`);
     }
 
-    const tekst = await odpowiedz.text();
-    const wiersze = tekst.trim().split(/\r?\n/);
+    const dane = await odpowiedz.json();
 
-    produkty = wiersze.slice(1)
-      .filter(wiersz => wiersz.trim() !== "")
-      .map(wiersz => {
-        const kolumny = wiersz.split(";");
+    // Odczytujemy wcześniejsze lokalne notatki i ulubione.
+    const zapisane = wczytajZapisane();
 
-        return {
-          nazwa: (kolumny[0] || "").trim(),
-          kategoria: (kolumny[1] || "").trim(),
-          opis: (kolumny[2] || "").trim(),
-          porcja: (kolumny[3] || "").trim() || "Do uzupełnienia",
-          status: (kolumny[4] || "").trim() || "Do sprawdzenia",
-          zrodlo: (kolumny[5] || "").trim(),
-          ulubiony: false,
-          notatka: ""
-        };
-      })
-      .filter(p => p.nazwa !== "");
+    produkty = dane.map(p => {
+      
+const lokalny = zapisane.find(stary => {
+  if (stary.id != null && p.id != null) {
+    return stary.id === p.id;
+  }
 
-    zapiszProdukty();
+  return stary.nazwa === p.nazwa;
+});
+
+
+      return {
+        ...p,
+        ulubiony: lokalny?.ulubiony === true,
+        notatka: lokalny?.notatka || ""
+      };
+    });
+
     uzupelnijKategorie();
     pokazProdukty();
 
-    document.getElementById("status").textContent =
-      "Wczytano produkty z CSV: " + produkty.length;
+    status.textContent =
+      "Wczytano produkty z Supabase: " + produkty.length;
 
-    } catch (blad) {
-    document.getElementById("status").textContent =
-      "Błąd wczytywania danych. Sprawdź serwer i plik CSV.";
+  } catch (blad) {
+    console.error("Błąd pobierania z Supabase:", blad);
 
-    console.error(blad);
+    status.textContent =
+      "Nie udało się pobrać produktów z Supabase.";
   }
 }
-
 function uzupelnijKategorie() {
       const filtr = document.getElementById("filtr");
       const wybrana = filtr.value;
@@ -456,29 +848,58 @@ function uzupelnijKategorie() {
         const usunBtn = document.createElement("button");
         usunBtn.textContent = "Usuń";
 
-        usunBtn.addEventListener("click", () => {
-          const potwierdzenie = confirm(
-            'Czy na pewno chcesz usunąć produkt "' + p.nazwa + '"?'
-          );
+        
+usunBtn.addEventListener("click", async () => {
+  if (!tokenAdministratora) {
+    alert("Musisz zalogować się jako administrator.");
+    return;
+  }
 
-          if (!potwierdzenie) {
-            return;
-          }
+  if (!p.id) {
+    alert("Nie znaleziono identyfikatora produktu.");
+    return;
+  }
 
-          produkty = produkty.filter(produkt => produkt !== p);
+  const potwierdzenie = confirm(
+    'Czy na pewno chcesz trwale usunąć produkt "' +
+    p.nazwa + '" z Supabase?'
+  );
 
-          zapiszProdukty();
-          uzupelnijKategorie();
-          pokazProdukty();
-        });
+  if (!potwierdzenie) {
+    return;
+  }
 
+  const status = document.getElementById("status");
 
+  usunBtn.disabled = true;
+  status.textContent = "Usuwam produkt z Supabase...";
 
-                karta.append(
-          tytul, kat, opis, porcja, status, zrodlo,
-          ulubionyBtn, etykieta, notatka, zapiszBtn,
-          edytujBtn, usunBtn
-        );
+  try {
+    await usunProduktZSupabase(p.id);
+
+    await wczytajCSV();
+
+    status.textContent =
+      'Produkt "' + p.nazwa +
+      '" został usunięty z Supabase.';
+
+  } catch (blad) {
+    console.error("Błąd usuwania produktu:", blad);
+
+    status.textContent =
+      "Nie udało się usunąć produktu z Supabase.";
+
+    usunBtn.disabled = false;
+  }
+});
+         
+karta.append(
+  tytul, kat, opis, porcja, status, zrodlo,
+  ulubionyBtn, etykieta, notatka, zapiszBtn
+);
+if (czyZalogowanyAdministrator) {
+  karta.append(edytujBtn, usunBtn);
+}
 
         lista.appendChild(karta);
       });
@@ -502,78 +923,244 @@ function uzupelnijKategorie() {
         pokazProdukty();
       });
 
-    document.getElementById("formularzProduktu")
-      .addEventListener("submit", function (e) {
-        e.preventDefault();
+    
+document.getElementById("formularzProduktu")
+  .addEventListener("submit", async function (e) {
+    e.preventDefault();
 
-        const nowyProdukt = {
-          nazwa: document.getElementById("nowaNazwa").value.trim(),
-          kategoria: document.getElementById("nowaKategoria").value.trim(),
-          opis: document.getElementById("nowyOpis").value.trim(),
-          porcja: document.getElementById("nowaPorcja").value.trim() || "Do uzupełnienia",
-          status: document.getElementById("nowyStatus").value,
-          zrodlo: document.getElementById("noweZrodlo").value.trim(),
-          ulubiony: false,
-          notatka: ""
-        };
+    const status = document.getElementById("status");
 
-        produkty.push(nowyProdukt);
-        zapiszProdukty();
-        uzupelnijKategorie();
-        pokazProdukty();
+    if (!tokenAdministratora) {
+      status.textContent =
+        "Musisz zalogować się jako administrator.";
+      return;
+    }
 
-        document.getElementById("formularzProduktu").reset();
+    const nowyProdukt = {
+      nazwa: document.getElementById("nowaNazwa").value.trim(),
+      kategoria: document.getElementById("nowaKategoria").value.trim(),
+      opis: document.getElementById("nowyOpis").value.trim(),
+      porcja: document.getElementById("nowaPorcja").value.trim(),
+      status: document.getElementById("nowyStatus").value,
+      zrodlo: document.getElementById("noweZrodlo").value.trim()
+    };
 
-        document.getElementById("status").textContent =
-          "Dodano produkt: " + nowyProdukt.nazwa;
-      });
+    status.textContent = "Zapisuję produkt w Supabase...";
+
+    try {
+      const aktualnyToken = await pobierzWaznyTokenAdministratora();
+      const odpowiedz = await fetch(
+        `${SUPABASE_URL}/rest/v1/produkty`,
+        {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${aktualnyToken}`,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal"
+          },
+          body: JSON.stringify(nowyProdukt)
+        }
+      );
+
+      if (!odpowiedz.ok) {
+        throw new Error(
+          `Błąd zapisu HTTP: ${odpowiedz.status}`
+        );
+      }
+
+      document.getElementById("formularzProduktu").reset();
+
+      await wczytajCSV();
+
+      status.textContent =
+        "Produkt został zapisany w Supabase: " +
+        nowyProdukt.nazwa;
+
+    } catch (blad) {
+      console.error("Błąd dodawania produktu:", blad);
+
+      status.textContent =
+        "Nie udało się zapisać produktu w Supabase.";
+    }
+  });
+
+
+document.getElementById("formularzLogowania")
+  .addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const email = document.getElementById("loginEmail").value.trim();
+    const haslo = document.getElementById("loginHaslo").value;
+    const status = document.getElementById("statusLogowania");
+
+    status.textContent = "Trwa logowanie...";
+
+    try {
+      
+const sesja = await zaloguj(email, haslo);
+zapiszSesje(sesja);
+idZalogowanegoUzytkownika = sesja.user.id;
+document.getElementById("wylogujBtn").hidden = false;
+
+const jestAdministratorem =
+  await sprawdzAdministratora(sesja.access_token);
+
+
+if (jestAdministratorem) {
+  czyZalogowanyAdministrator = true;
+  tokenAdministratora = sesja.access_token;
+  status.textContent =
+    "Zalogowano jako administrator: " +
+    sesja.user.email;
+
+  document.getElementById(
+    "panelAdministracyjny"
+  ).hidden = false;
+
+pokazProdukty();
+
+} else {
+  czyZalogowanyAdministrator = false;
+  tokenAdministratora = null;
+
+  status.textContent =
+    "Zalogowano jako użytkownik bez uprawnień administratora.";
+
+  document.getElementById(
+    "panelAdministracyjny"
+  ).hidden = true;
+}
+
+
+
+      document.getElementById("loginHaslo").value = "";
+
+    } catch (blad) {
+      console.error("Błąd logowania:", blad);
+      status.textContent = "Nie udało się zalogować. Sprawdź dane.";
+    }
+  });
+
+document.getElementById("wylogujBtn")
+  .addEventListener("click", async function () {
+    const przycisk = this;
+    const status = document.getElementById("statusLogowania");
+
+    przycisk.disabled = true;
+    status.textContent = "Trwa wylogowywanie...";
+
+    try {
+      if (tokenSesji) {
+        const odpowiedz = await fetch(
+          `${SUPABASE_URL}/auth/v1/logout`,
+          {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${tokenSesji}`
+            }
+          }
+        );
+
+        if (!odpowiedz.ok) {
+          throw new Error("Nie udało się zakończyć sesji.");
+        }
+      }
+
+      tokenSesji = null;
+      refreshTokenSesji = null;
+      tokenAdministratora = null;
+      czyZalogowanyAdministrator = false;
+      idZalogowanegoUzytkownika = null;
+
+      localStorage.removeItem(KLUCZ_SESJI);
+
+      document.getElementById(
+        "panelAdministracyjny"
+      ).hidden = true;
+
+      document.getElementById(
+        "sekcjaEdycji"
+      ).hidden = true;
+
+      edytowanyProdukt = null;
+
+      document.getElementById(
+        "formularzLogowania"
+      ).reset();
+
+      document.getElementById(
+        "wylogujBtn"
+      ).hidden = true;
+
+      pokazProdukty();
+
+      status.textContent = "Wylogowano pomyślnie.";
+
+    } catch (blad) {
+      console.error("Błąd wylogowania:", blad);
+      status.textContent =
+        "Nie udało się wylogować. Spróbuj ponownie.";
+    } finally {
+      przycisk.disabled = false;
+    }
+  });
 
     wczytajCSV();
+    przywrocSesje();
 
-    document.getElementById("formularzEdycji")
-      .addEventListener("submit", function (e) {
-        e.preventDefault();
+    
+document.getElementById("formularzEdycji")
+  .addEventListener("submit", async function (e) {
+    e.preventDefault();
 
-        if (!edytowanyProdukt) {
-          return;
-        }
+    if (!edytowanyProdukt || !edytowanyProdukt.id) {
+      return;
+    }
 
-        edytowanyProdukt.nazwa =
-          document.getElementById("edycjaNazwa").value.trim();
+    const status = document.getElementById("status");
 
-        edytowanyProdukt.kategoria =
-          document.getElementById("edycjaKategoria").value.trim();
+    const zmiany = {
+      nazwa: document.getElementById("edycjaNazwa").value.trim(),
+      kategoria: document.getElementById("edycjaKategoria").value.trim(),
+      opis: document.getElementById("edycjaOpis").value.trim(),
+      porcja: document.getElementById("edycjaPorcja").value.trim(),
+      status: document.getElementById("edycjaStatus").value,
+      zrodlo: document.getElementById("edycjaZrodlo").value.trim()
+    };
 
-        edytowanyProdukt.opis =
-          document.getElementById("edycjaOpis").value.trim();
+    status.textContent = "Zapisuję zmiany w Supabase...";
 
-        edytowanyProdukt.porcja =
-          document.getElementById("edycjaPorcja").value.trim();
+    try {
+      await aktualizujProduktWSupabase(
+        edytowanyProdukt.id,
+        zmiany
+      );
 
-        edytowanyProdukt.status =
-          document.getElementById("edycjaStatus").value;
+      document.getElementById("sekcjaEdycji").hidden = true;
+      edytowanyProdukt = null;
 
-        edytowanyProdukt.zrodlo =
-          document.getElementById("edycjaZrodlo").value.trim();
+      await wczytajCSV();
 
-        zapiszProdukty();
-        uzupelnijKategorie();
-        pokazProdukty();
+      status.textContent =
+        "Zmiany produktu zostały zapisane w Supabase.";
 
-        document.getElementById("sekcjaEdycji").hidden = true;
-        edytowanyProdukt = null;
+    } catch (blad) {
+      console.error("Błąd edycji produktu:", blad);
 
-        document.getElementById("status").textContent =
-          "Zmiany produktu zostały zapisane.";
-      });
+      status.textContent =
+        "Nie udało się zapisać zmian w Supabase.";
+    }
+  });
+
     document.getElementById("anulujEdycje")
       .addEventListener("click", () => {
         document.getElementById("sekcjaEdycji").hidden = true;
         document.getElementById("formularzEdycji").reset();
         edytowanyProdukt = null;
       });
-    wczytajCSV();
-
+  
     document.getElementById("eksportujDane")
       .addEventListener("click", () => {
         const dane = JSON.stringify(produkty, null, 2);
